@@ -5,6 +5,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error, r2_score
 from io import BytesIO
+from datetime import datetime
 
 # === Title ===
 st.title("📈 Customer Lifetime Value (CLV) Prediction")
@@ -70,3 +71,52 @@ if uploaded_file:
         st.error(f"Error: {e}")
 else:
     st.info("Awaiting CSV upload...")
+        
+
+
+import pandas as pd
+from datetime import datetime
+
+# === Load the dataset ===
+file_path = "online_retail_II.xlsx"  # Ensure this file is in your working directory
+
+# Load the correct sheet (usually "Year 2010-2011")
+df = pd.read_excel(file_path, sheet_name="Year 2010-2011")
+
+# === Clean column names ===
+df.columns = df.columns.str.strip()  # Remove leading/trailing spaces
+
+# === Check and fix column names ===
+expected_cols = ['InvoiceNo', 'StockCode', 'Description', 'Quantity', 'InvoiceDate', 'UnitPrice', 'CustomerID', 'Country']
+for col in expected_cols:
+    if col not in df.columns:
+        raise KeyError(f"Missing expected column: {col}")
+
+# === Filter data ===
+df = df[df['CustomerID'].notna()]
+df = df[df['Quantity'] > 0]
+
+# === Create Total Sales column ===
+df['TotalSales'] = df['Quantity'] * df['UnitPrice']
+
+# === Set snapshot date for recency calculation ===
+snapshot_date = df['InvoiceDate'].max() + pd.Timedelta(days=1)
+
+# === Group by customer to compute RFM ===
+rfm = df.groupby('CustomerID').agg({
+    'InvoiceDate': lambda x: (snapshot_date - x.max()).days,  # Recency
+    'InvoiceNo': 'nunique',                                   # Frequency
+    'TotalSales': 'sum'                                       # Monetary
+}).reset_index()
+
+# Rename columns
+rfm.columns = ['CustomerID', 'Recency', 'Frequency', 'Monetary']
+
+# === Basic CLV Calculation (can be improved with a model later) ===
+rfm['CLV'] = rfm['Monetary']
+
+# === Save to CSV ===
+rfm.to_csv("customer_clv.csv", index=False)
+print("✅ customer_clv.csv generated successfully with", len(rfm), "customers.")
+
+breakpoint = datetime.now()
